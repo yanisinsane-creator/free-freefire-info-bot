@@ -20,6 +20,7 @@ It returns profile data such as level, rank, guild info, credit score, social pr
 - A `.env` file containing:
   ```ini
   TOKEN=your_bot_token
+  PORT = port where the bot will turn
   ```
 
 ## Installation
@@ -44,6 +45,7 @@ It returns profile data such as level, rank, guild info, credit score, social pr
 4. Create a `.env` file in the root directory and add your credentials:
    ```ini
    TOKEN=your_bot_token
+   PORT = port where the bot will turn
    ```
 
 5. Run the bot:
