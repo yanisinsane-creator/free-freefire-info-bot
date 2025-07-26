@@ -33,7 +33,7 @@ if os.path.exists(".env"):
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
-    raise ValueError("DISCORD_TOKEN not found in environment variables")
+    raise ValueError("TOKEN not found in environment variables")
 
 extensions = [
     "cogs.infoCommands"
