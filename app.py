@@ -31,7 +31,7 @@ flask_thread.start()
 if os.path.exists(".env"):
     load_dotenv()
 
-TOKEN = os.getenv("DISCORD_TOKEN")
+TOKEN = os.getenv("TOKEN")
 if not TOKEN:
     raise ValueError("DISCORD_TOKEN not found in environment variables")
 
