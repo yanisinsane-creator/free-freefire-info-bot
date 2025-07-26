@@ -27,9 +27,8 @@ def run_flask():
 
 flask_thread = threading.Thread(target=run_flask, daemon=True)
 flask_thread.start()
+load_dotenv()
 
-if os.path.exists(".env"):
-    load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 if not TOKEN:
