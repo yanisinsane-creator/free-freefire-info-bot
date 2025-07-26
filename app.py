@@ -1,140 +1,115 @@
 import discord
-from discord.ext import commands , tasks 
+from discord.ext import commands, tasks
 import os
 import traceback
 from flask import Flask
-import threading
 import sys
 import aiohttp
 import asyncio
 from dotenv import load_dotenv
 
-# Flask Initialization
+# Initialize environment variables
+load_dotenv()
+
+# Flask Setup
 app = Flask(__name__)
-bot_name = "None"
+bot_name = "Loading..."
 
 @app.route('/')
 def home():
-    return f"Bot {bot_name} is active"
-
+    """Health check endpoint for Render"""
+    return f"Bot {bot_name} is operational"
 
 def run_flask():
+    """Run Flask with Render-compatible settings"""
     port = int(os.environ.get("PORT", 10000))
-    if os.name == 'nt':
-        from waitress import serve
-        serve(app, host="0.0.0.0", port=port)
+    app.run(host='0.0.0.0', port=port)
 
-
-flask_thread = threading.Thread(target=run_flask, daemon=True)
-flask_thread.start()
-
-if os.path.exists(".env"):
-    load_dotenv()
-
-TOKEN = os.getenv("DISCORD_TOKEN")
+# Discord Bot Setup
+TOKEN = os.getenv("TOKEN")
 if not TOKEN:
-    raise ValueError("DISCORD_TOKEN not found in environment variables")
+    raise ValueError("Missing TOKEN in environment")
 
-extensions = [
-    "cogs.infoCommands"
-]
-
-
-class Seemu(commands.Bot):
-    def __init__(self, command_prefix: str, intents: discord.Intents, **kwargs):
-        super().__init__(command_prefix=command_prefix, intents=intents, **kwargs)
+class Bot(commands.Bot):
+    def __init__(self):
+        # Configure minimal required intents
+        intents = discord.Intents.default()
+        intents.message_content = True
+        
+        super().__init__(
+            command_prefix="!",
+            intents=intents,
+            help_command=None
+        )
         self.session = None
-        self.initialized = False
 
-    async def setup_hook(self) -> None:
+    async def setup_hook(self):
+        """Initialize bot components"""
         self.session = aiohttp.ClientSession()
-
-        for ext in extensions:
-            try:
-                await self.load_extension(ext)
-                print(f"✅ {ext} loaded successfully")
-            except Exception as e:
-                print(f"❌ Failed to load {ext}: {e}")
-                traceback.print_exc()
-
+        
+        # Load cogs
+        try:
+            await self.load_extension("cogs.infoCommands")
+            print("✅ Successfully loaded InfoCommands cog")
+        except Exception as e:
+            print(f"❌ Failed to load cog: {e}")
+            traceback.print_exc()
+        
         await self.tree.sync()
-        print("✔ All cogs loaded")
-        self.initialized = True
-        self.update_activity_task.start()
+        self.update_status.start()
 
     async def on_ready(self):
+        """When bot connects to Discord"""
         global bot_name
-        if not self.initialized:
-            return
-
-        server_count = len(self.guilds) #
-        activity = discord.Game(name=f"Sharing likes on {server_count} servers")
-        await self.change_presence(activity=activity)
-        bot_name = f"{self.user}"
-        print(f"\n🔗 Connected as {bot_name}")
-        print(f"🌐 Flask running on port {os.environ.get('PORT', 10000)}\n")
+        bot_name = str(self.user)
         
-    @tasks.loop(minutes=5) 
-    
-    async def update_activity_task(self):
+        print(f"\n🔗 Connected as {bot_name}")
+        print(f"🌐 Serving {len(self.guilds)} servers")
+        
+        # Start Flask if running on Render
+        if os.environ.get('RENDER'):
+            import threading
+            flask_thread = threading.Thread(target=run_flask, daemon=True)
+            flask_thread.start()
+            print("🚀 Flask server started in background")
 
+    @tasks.loop(minutes=5)
+    async def update_status(self):
+        """Update bot presence periodically"""
         try:
-            server_count = len(self.guilds) #
-            activity = discord.Game(name=f"Work in  {server_count} servers !! ")
+            activity = discord.Activity(
+                type=discord.ActivityType.watching,
+                name=f"{len(self.guilds)} servers"
+            )
             await self.change_presence(activity=activity)
-
-
         except Exception as e:
-            print(f"⚠️ Erreur lors de la mise à jour de l'activité : {e}")
-            traceback.print_exc()
+            print(f"⚠️ Status update failed: {e}")
 
-    @update_activity_task.before_loop
-    async def before_update_activity_task(self):
+    @update_status.before_loop
+    async def before_status_update(self):
         await self.wait_until_ready()
-        print("Bot prêt, démarrage de la boucle de mise à jour de l'activité.")
+
     async def close(self):
+        """Cleanup on shutdown"""
         if self.session:
             await self.session.close()
         await super().close()
 
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
-      
-        if isinstance(error, commands.MissingPermissions):
-            try:
-                msg = "❌ You need to be an administrator to use this command."
-                if ctx.interaction and ctx.interaction.response.is_done():
-                    await ctx.followup.send(msg, ephemeral=True)
-                else:
-                    await ctx.send(msg, ephemeral=True)
-            except:
-                pass
-            return
-
-        elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send("⚠️ Missing required argument.", ephemeral=True)
-            return
-
-        elif isinstance(error, commands.CommandNotFound):
-            return
-
-        print(f"Unhandled error: {error}")
+async def main():
+    bot = Bot()
+    try:
+        await bot.start(TOKEN)
+    except KeyboardInterrupt:
+        await bot.close()
+    except Exception as e:
+        print(f"⚠️ Critical error: {e}")
         traceback.print_exc()
-        await ctx.send("⚠️ An unexpected error occurred. [1214]", ephemeral=True)
-
+        await bot.close()
 
 if __name__ == "__main__":
-    try:
-        intents = discord.Intents.all()
-        bot = Seemu(command_prefix="!", intents=intents)
+    # Special handling for Render's environment
+    if os.environ.get('RENDER'):
+        asyncio.run(main())
+    else:
+        bot = Bot()
         bot.run(TOKEN)
-    except discord.errors.LoginFailure:
-        print("❌ Invalid Discord token")
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("\n🛑 Stopping bot...")
-        sys.exit(0)
-    except Exception as e:
-        print(f"⚠️ Unexpected error: {e}")
-        traceback.print_exc()
-        sys.exit(1)
