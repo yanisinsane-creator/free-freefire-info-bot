@@ -9,6 +9,7 @@ import aiohttp
 import asyncio
 from dotenv import load_dotenv
 
+load_dotenv()
 # Flask Initialization
 app = Flask(__name__)
 bot_name = "None"
@@ -27,7 +28,7 @@ def run_flask():
 
 flask_thread = threading.Thread(target=run_flask, daemon=True)
 flask_thread.start()
-load_dotenv()
+
 
 
 TOKEN = os.getenv("TOKEN")
